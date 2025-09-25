@@ -11,12 +11,10 @@ pipeline {
         stage('Secret Scanning') {
             steps {
                 sh '''
-                    echo "=== Running TruffleHog Secret Scanning ==="
-                    docker run --rm \
-                        -v $WORKSPACE:/repo \
-                        trufflesecurity/trufflehog:latest git /repo --json > trufflehog_report.json || true
-
-                    echo "=== Scan finished. Report saved to trufflehog_report.json ==="
+                echo "=== Running TruffleHog Secret Scanning (Remote Repo)==="
+                docker run --rm trufflesecurity/trufflehog:latest \
+                git https://github.com/lazuto123/vuln-bank --json > trufflehog_report.json || true
+                echo "=== Scan finished. Report saved to trufflehog_report.json ==="
                 '''
             }
             post {
