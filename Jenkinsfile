@@ -40,7 +40,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                      pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+                      pip install --no-cache-dir --only-binary=:all: --use-deprecated=legacy-resolver -r requirements.txt
                       snyk test --file=requirements.txt --package-manager=pip --json > snyk-scan-report.json
                       cat snyk-scan-report.json
                     '''
