@@ -2,15 +2,29 @@ pipeline {
     agent any
 
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Secret Scanning') {
             steps {
                 sh '''
-                trufflehog git https://github.com/lazuto123/vuln-bank --json > trufflehog_report.json || true
+                    echo "=== Running TruffleHog Secret Scanning ==="
+                    docker run --rm \
+                        -v $WORKSPACE:/repo \
+                        trufflesecurity/trufflehog:latest git /repo --json > trufflehog_report.json || true
+
+                    echo "=== Scan finished. Report saved to trufflehog_report.json ==="
                 '''
             }
             post {
                 always {
                     archiveArtifacts artifacts: 'trufflehog_report.json', allowEmptyArchive: true
+                }
+                failure {
+                    echo "Secret scanning failed."
                 }
             }
         }
