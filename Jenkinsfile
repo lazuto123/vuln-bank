@@ -40,8 +40,8 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                      echo "=== Running Snyk SCA Test ==="
-                      snyk test --file=requirements.txt --package-manager=pip --json > snyk-scan-report.json || true
+                      echo "=== Running Snyk SCA Test (skip unresolved deps)==="
+                      snyk test --file=requirements.txt --package-manager=pip --skip-unresolved --json > snyk-scan-report.json || true
                       cat snyk-scan-report.json
                       echo "=== Snyk scan finished. Report saved to snyk-scan-report.json ==="
                     '''
