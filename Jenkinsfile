@@ -37,6 +37,7 @@ pipeline {
                     docker run --rm \
                       -e SNYK_TOKEN=$SNYK_TOKEN \
                       -v $PWD:/app \
+                      -w /app \
                       snyk/snyk:docker test --json > snyk_report.json || true
                     echo "=== Snyk scan finished. Report saved to snyk_report.json ==="
                 '''
