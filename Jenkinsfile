@@ -2,6 +2,21 @@ pipeline {
     agent any
 
     stages {
+		stage('Secret Scanning') {
+			agent {
+				docker {
+					image 'trufflesecurity/trufflehog:latest'
+					args '--entrypoint'
+				}
+			}
+			steps{
+				catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
+					sh 'trufflehog filesystem --exclude-paths trufflehog-excluded-paths.txt --fail --json --no update > trufflehog-scan-result.json'
+				}
+				sh 'cat trufflehog-scan-result.json'
+				archiveArtifacts artifacts: 'trufflehog-scan-result.json'
+			}
+        }        
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
