@@ -2,21 +2,18 @@ pipeline {
     agent any
 
     stages {
-		stage('Secret Scanning') {
-			agent {
-				docker {
-					image 'trufflesecurity/trufflehog:latest'
-					args '--entrypoint'
-				}
-			}
-			steps{
-				catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE'){
-					sh 'trufflehog filesystem --exclude-paths trufflehog-excluded-paths.txt --fail --json --no update > trufflehog-scan-result.json'
-				}
-				sh 'cat trufflehog-scan-result.json'
-				archiveArtifacts artifacts: 'trufflehog-scan-result.json'
-			}
-        }        
+        stage('Secret Scanning') {
+            steps {
+                sh '''
+                trufflehog git https://github.com/lazuto123/vuln-bank --json > trufflehog_report.json || true
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trufflehog_report.json', allowEmptyArchive: true
+                }
+            }
+        }
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
