@@ -30,7 +30,7 @@ pipeline {
         stage('SCA Snyk Test') {
             agent {
                 docker {
-                    image 'snyk/snyk:python-3.10'
+                    image 'snyk/snyk:python'
                     args '-u root --network host --env SNYK_TOKEN=$SNYK_TOKEN --entrypoint='
                 }
             }
@@ -39,8 +39,11 @@ pipeline {
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh 'snyk test --file=requirements.txt --package-manager=pip --json > snyk-scan-report.json'
-                    sh 'cat snyk-scan-report.json'
+                    sh '''
+                      pip install -r requirements.txt
+                      snyk test --file=requirements.txt --package-manager=pip --json > snyk-scan-report.json
+                      cat snyk-scan-report.json
+                    '''
                 }
                 archiveArtifacts artifacts: 'snyk-scan-report.json'
             }
