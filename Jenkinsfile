@@ -33,6 +33,9 @@ pipeline {
         }
 
         stage('SCA Snyk Test') {
+            environment {
+            SNYK_TOKEN = credentials('SnykToken')
+            }
             steps {
                 script {
                     sh '''
