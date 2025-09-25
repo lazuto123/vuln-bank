@@ -32,28 +32,32 @@ pipeline {
             }
         }
 
-         stage('SCA with Snyk') {
-            environment {
-                SNYK_TOKEN = credentials('SnykToken')
+        stage('SCA Snyk (docker run)') {
+          environment {
+            SNYK_TOKEN = credentials('SnykToken')
+          }
+          steps {
+            sh '''
+              echo "Workspace: $PWD"
+              ls -la
+        
+              # jalankan container Snyk dengan mount workspace ke /app dan workdir /app
+              docker run --rm \
+                -e SNYK_TOKEN=$SNYK_TOKEN \
+                -v "$PWD":/app \
+                -w /app \
+                -u root \
+                snyk/snyk:docker \
+                test --file=requirements.txt --json > snyk_report.json
+            '''
+          }
+          post {
+            always {
+              archiveArtifacts artifacts: 'snyk_report.json', fingerprint: true
+              sh 'test -f snyk_report.json && head -n 40 snyk_report.json || echo "no report produced"'
             }
-            steps {
-                sh '''
-                    echo "=== Running Snyk SCA Analysis ==="
-                    docker run --rm \
-                      -e SNYK_TOKEN=$SNYK_TOKEN \
-                      -v $PWD:/app \
-                      -w /app \
-                      snyk/snyk:docker test --json > snyk_report.json || true
-                    echo "=== Snyk scan finished. Report saved to snyk_report.json ==="
-                '''
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'snyk_report.json', fingerprint: true
-                }
-            }
+          }
         }
-
         
         stage('Deploy') {
             steps {
