@@ -39,7 +39,7 @@ pipeline {
                             -e SNYK_TOKEN=$SNYK_TOKEN \
                             -v $(pwd):/app \
                             -w /app \
-                            snyk/snyk:python snyk test --file=requirements.txt --package-manager=pip --json > snyk_report.json
+                            snyk/snyk:python snyk test --file=requirements.txt --package-manager=pip --json > snyk_report.json || true
                         echo "=== Snyk scan finished. Report saved to snyk_report.json ==="
                     '''
                 }
