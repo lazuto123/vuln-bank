@@ -17,7 +17,7 @@ pipeline {
                 docker run --rm \
                   -e SNYK_TOKEN=$SNYK_TOKEN \
                   -v /var/jenkins_home/workspace/vuln-bank:/app \
-                  -w /app snyk/snyk:docker test --file=requirements.txt --json > snyk_report.json || true
+                  -w /app snyk/snyk:python test --file=requirements.txt --json > snyk_report.json || true
     
                 echo "=== Snyk scan finished. Report saved to snyk_report.json ==="
                 '''
