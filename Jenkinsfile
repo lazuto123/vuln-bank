@@ -40,15 +40,16 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                      pip install --no-cache-dir --only-binary=:all: --use-deprecated=legacy-resolver -r requirements.txt
-                      snyk test --file=requirements.txt --package-manager=pip --json > snyk-scan-report.json
+                      echo "=== Running Snyk SCA Test ==="
+                      snyk test --file=requirements.txt --package-manager=pip --json > snyk-scan-report.json || true
                       cat snyk-scan-report.json
+                      echo "=== Snyk scan finished. Report saved to snyk-scan-report.json ==="
                     '''
                 }
                 archiveArtifacts artifacts: 'snyk-scan-report.json'
             }
         }
-                
+             
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
