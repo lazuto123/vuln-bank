@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     stages {
-        stage('Deploy to Server') {
+        stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
                     sh '''
