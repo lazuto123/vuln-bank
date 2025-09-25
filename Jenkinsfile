@@ -26,6 +26,29 @@ pipeline {
                 }
             }
         }
+
+         stage('SCA with Snyk') {
+            environment {
+                SNYK_TOKEN = credentials('SnykToken')
+            }
+            steps {
+                sh '''
+                    echo "=== Running Snyk SCA Analysis ==="
+                    docker run --rm \
+                      -e SNYK_TOKEN=$SNYK_TOKEN \
+                      -v $PWD:/app \
+                      snyk/snyk:docker test --json > snyk_report.json || true
+                    echo "=== Snyk scan finished. Report saved to snyk_report.json ==="
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'snyk_report.json', fingerprint: true
+                }
+            }
+        }
+
+        
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
