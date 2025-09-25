@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     triggers {
-        pollSCM('H/5 * * * *')  // cek setiap 5 menit
+        pollSCM('* * * * *')  
     }
 
     stages {
