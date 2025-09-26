@@ -45,7 +45,7 @@ When **High or Critical findings** are detected:
 
 - Pipeline marks the stage with security issues.  
 - Adds the findings to a short summary.  
-- Sends **email notification** to the communication channel (`brigaup987@gmail.com`).  
+- Sends **email notification** to the communication channel.  
 - Full details can be reviewed in the Jenkins artifacts (JSON/XML/HTML scan reports).  
 
 If **no High/Critical findings** are present, the pipeline proceeds normally without sending an email.
