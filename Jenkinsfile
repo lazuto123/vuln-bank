@@ -87,20 +87,15 @@ pipeline {
             steps {
                 sh '''
                   echo "=== Running Hadolint on Dockerfile ==="
-                  docker run --rm -v ${WORKSPACE}:/src hadolint/hadolint:latest \
-                    hadolint /src/Dockerfile -f json > hadolint-report.json || true
+                  mkdir -p /tmp/scan-src
+                  cp Dockerfile docker-compose.yml /tmp/scan-src/
+                
+                  docker run --rm -v /tmp/scan-src:/src hadolint/hadolint:latest hadolint /src/Dockerfile -f json > hadolint-report.json || true
                   
                   echo "=== Running KICS on docker-compose.yml ==="
-                  mkdir -p kics-out
-                  docker run --rm -v ${WORKSPACE}:/src checkmarx/kics:latest \
-                    scan --path /src/docker-compose.yml --output-path /src/kics-out --report-formats json || true
-        
-                  if [ -f kics-out/results.json ]; then
-                    mv kics-out/results.json kics-report.json
-                  else
-                    echo '{"ok":false,"error":"no output"}' > kics-report.json
-                  fi
-        
+                  docker run --rm -v /tmp/scan-src:/src checkmarx/kics:latest scan --path /src/docker-compose.yml --output-path /src --report-formats json || true
+                
+                  [ -f /tmp/scan-src/results.json ] && mv /tmp/scan-src/results.json kics-report.json || echo '{"ok":false,"error":"no output"}' > kics-report.json
                   echo "=== Misconfig scans finished. Reports saved ==="
                 '''
             }
