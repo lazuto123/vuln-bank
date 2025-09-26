@@ -102,7 +102,7 @@ pipeline {
                     echo "=== Preparing inventory for remote server ==="
                     cat > inventory.ini <<EOL
         [ubuntuServer]
-        192.168.0.115 ansible_user=${DEPLOY_USER} ansible_password=${DEPLOY_PASS} ansible_sudo_pass=${DEPLOY_PASS}
+        192.168.0.115 ansible_user=${DEPLOY_USER} ansible_password=${DEPLOY_PASS} ansible_become_pass=${DEPLOY_PASS}
         EOL
         
                     echo "=== Preparing Ansible Playbook for OS Hardening ==="
@@ -110,21 +110,22 @@ pipeline {
         ---
         - name: Playbook to harden Ubuntu OS
           hosts: ubuntuServer
-          remote_user: ${DEPLOY_USER}
           become: yes
           roles:
             - dev-sec.os-hardening
         EOL
         
-                    echo "=== Installing dev-sec.os-hardening role ==="
+                    echo "=== Installing required roles and collections ==="
+                    ansible-galaxy collection install community.general
                     ansible-galaxy install dev-sec.os-hardening
         
                     echo "=== Running Ansible Playbook ==="
-                    ansible-playbook -i inventory.ini hardening.yml
+                    ansible-playbook -i inventory.ini hardening.yml -vvv
                     '''
                 }
             }
         }
+
 
         stage('Deploy') {
             steps {
