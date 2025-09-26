@@ -124,7 +124,7 @@ pipeline {
                     def sendMail = false
                     def reportContent = ""
         
-                    // Cek TruffleHog
+                    // === TruffleHog Secret Scanning ===
                     if (fileExists('trufflehog_report.json')) {
                         def secrets = readJSON file: 'trufflehog_report.json'
                         if (secrets && secrets.size() > 0) {
@@ -133,39 +133,43 @@ pipeline {
                         }
                     }
         
-                    // Cek Snyk SCA
+                    // === Snyk SCA ===
                     if (fileExists('snyk-scan-report.json')) {
                         def snyk = readJSON file: 'snyk-scan-report.json'
-                        def highVulns = snyk.vulnerabilities.findAll { it.severity in ["high","critical"] }
+                        def vulns = snyk?.vulnerabilities ?: []
+                        def highVulns = vulns.findAll { it.severity in ["high","critical"] }
                         if (highVulns.size() > 0) {
                             sendMail = true
                             reportContent += "${highVulns.size()} High/Critical vulnerability dari Snyk SCA!\n"
                         }
                     }
         
-                    // Cek Snyk SAST
+                    // === Snyk SAST (SARIF format) ===
                     if (fileExists('snyk-sast-report.json')) {
                         def sast = readJSON file: 'snyk-sast-report.json'
-                        def highIssues = sast.issues.findAll { it.severity in ["high","critical"] }
+                        def results = sast?.runs?.collectMany { it.results } ?: []
+                        // SARIF pakai 'level': error, warning, note
+                        def highIssues = results.findAll { it.level == "error" }
                         if (highIssues.size() > 0) {
                             sendMail = true
                             reportContent += "${highIssues.size()} High/Critical issue dari Snyk SAST!\n"
                         }
                     }
         
-                    // Cek ZAP DAST
+                    // === OWASP ZAP DAST ===
                     if (fileExists('zapbaseline.xml')) {
                         def zapXml = new XmlSlurper().parse(new File("zapbaseline.xml"))
-                        def highFindings = zapXml.site.alerts.alert.findAll { it.riskcode.text() in ["3","4"] }
+                        def highFindings = zapXml.site.alerts.alertitem.findAll { it.riskcode.text() in ["3","4"] }
                         if (highFindings.size() > 0) {
                             sendMail = true
                             reportContent += "${highFindings.size()} High/Critical finding dari OWASP ZAP!\n"
                         }
                     }
         
+                    // === Kirim Email kalau ada temuan ===
                     if (sendMail) {
                         emailext(
-                            subject: "Security Alerts di Pipeline",
+                            subject: "Security Alerts di Pipeline - vuln-bank",
                             body: """Halo Ilham,
         
         Ditemukan masalah security pada pipeline vuln-bank:
