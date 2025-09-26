@@ -82,31 +82,57 @@ pipeline {
             }
         }
 
-        stage('Snyk IaC Misconfiguration') {
-            agent {
-                docker {
-                    image 'snyk/snyk:docker'
-                    args '-u root --network host --env SNYK_TOKEN=$SNYK_TOKEN --entrypoint='
-                }
-            }
-            environment {
-                SNYK_TOKEN = credentials('SnykToken')
-            }
+        stage('Misconfiguration Scanning (Dockerfile & compose)') {
+            agent any
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                      echo "=== Running Snyk IaC Misconfiguration Scan ==="
+                      set -euo pipefail || true
+                      echo "=== Misconfiguration scan: hadolint (Dockerfile) & kics (docker-compose.yml) ==="
         
-                      # Scan Dockerfile
-                      snyk iac test Dockerfile --json > snyk-iac-docker-report.json || true
+                      # Hadolint for Dockerfile
+                      if [ -f Dockerfile ]; then
+                        echo "[hadolint] Dockerfile found — running hadolint..."
+                        docker run --rm -v "$PWD":/data hadolint/hadolint:latest hadolint /data/Dockerfile -f json > hadolint-report.json || true
+                        echo "[hadolint] report written to hadolint-report.json"
+                      else
+                        echo '[hadolint] Dockerfile not found, creating placeholder report'
+                        echo '{"ok": false, "error": "Dockerfile not found"}' > hadolint-report.json
+                      fi
         
-                      # Scan Kubernetes manifests
-                      snyk iac test docker-compose.yml --json > snyk-iac-docker-compose-report.json || true
+                      # KICS for docker-compose.yml
+                      if [ -f docker-compose.yml ]; then
+                        echo "[kics] docker-compose.yml found — running KICS..."
+                        # output-path will contain .json files; run as temporary directory 'kics-report'
+                        rm -rf kics-report || true
+                        docker run --rm -v "$PWD":/workspace checkmarx/kics:latest scan --path /workspace/docker-compose.yml --output-path /workspace/kics-report --report-formats json || true
         
-                      echo "=== Misconfiguration scan finished. Reports saved. ==="
+                        # Normalize KICS output into single JSON file for downstream consumption
+                        if [ -d kics-report ]; then
+                          # concatenate all json outputs (if multiple) into one array-ish file (simple concat)
+                          cat kics-report/*.json > kics-report.json 2>/dev/null || echo '{"ok": false, "error": "KICS produced no JSON output"}' > kics-report.json
+                          echo "[kics] report written to kics-report.json"
+                        else
+                          echo '[kics] KICS did not produce output directory, creating placeholder report'
+                          echo '{"ok": false, "error": "KICS scan failed or produced no output"}' > kics-report.json
+                        fi
+                      else
+                        echo '[kics] docker-compose.yml not found, creating placeholder report'
+                        echo '{"ok": false, "error": "docker-compose.yml not found"}' > kics-report.json
+                      fi
+        
+                      echo "=== Misconfiguration scan finished ==="
+                      echo "---- hadolint report ----"
+                      cat hadolint-report.json || true
+                      echo "---- kics report ----"
+                      cat kics-report.json || true
                     '''
                 }
-                archiveArtifacts artifacts: 'snyk-iac-*.json', allowEmptyArchive: true
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'hadolint-report.json,kics-report.json', allowEmptyArchive: true
+                }
             }
         }
 
