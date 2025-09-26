@@ -82,51 +82,34 @@ pipeline {
             }
         }
 
-        stage('Dockerfile Misconfig (Hadolint)') {
+        stage('Misconfig Scan (Hadolint & KICS)') {
             agent any
             steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh '''
-                      echo "=== Running Hadolint on Dockerfile ==="
-                      docker run --rm -v ${WORKSPACE}:/data hadolint/hadolint:latest \
-                        hadolint /data/Dockerfile -f json > hadolint-report.json || true
-                      echo "=== Hadolint finished. Report saved to hadolint-report.json ==="
-                    '''
-                }
+                sh '''
+                  echo "=== Running Hadolint on Dockerfile ==="
+                  docker run --rm -v ${WORKSPACE}:/src hadolint/hadolint:latest \
+                    hadolint /src/Dockerfile -f json > hadolint-report.json || true
+                  
+                  echo "=== Running KICS on docker-compose.yml ==="
+                  mkdir -p kics-out
+                  docker run --rm -v ${WORKSPACE}:/src checkmarx/kics:latest \
+                    scan --path /src/docker-compose.yml --output-path /src/kics-out --report-formats json || true
+        
+                  if [ -f kics-out/results.json ]; then
+                    mv kics-out/results.json kics-report.json
+                  else
+                    echo '{"ok":false,"error":"no output"}' > kics-report.json
+                  fi
+        
+                  echo "=== Misconfig scans finished. Reports saved ==="
+                '''
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'hadolint-report.json', allowEmptyArchive: true
+                    archiveArtifacts artifacts: '*.json', allowEmptyArchive: true
                 }
             }
         }
-        
-        stage('Compose Misconfig (KICS)') {
-            agent any
-            steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    sh '''
-                      echo "=== Running KICS on docker-compose.yml ==="
-                      mkdir -p kics-out
-                      docker run --rm -v ${WORKSPACE}:/src checkmarx/kics:latest \
-                        scan --path /src/docker-compose.yml --output-path /src/kics-out --report-formats json || true
-        
-                      if [ -f kics-out/results.json ]; then
-                        mv kics-out/results.json kics-report.json
-                      else
-                        cat kics-out/*.json > kics-report.json 2>/dev/null || echo '{"ok":false,"error":"no output"}' > kics-report.json
-                      fi
-                      echo "=== KICS finished. Report saved to kics-report.json ==="
-                    '''
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'kics-report.json', allowEmptyArchive: true
-                }
-            }
-        }
-
         
         stage('Deploy') {
             steps {
