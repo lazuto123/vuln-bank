@@ -82,20 +82,31 @@ pipeline {
             }
         }
 
-        stage('Misconfig Scan (Hadolint & KICS)') {
-            agent any
+        stage('Misconfig Scan') {
             steps {
                 sh '''
-                  echo "=== Running Hadolint on Dockerfile ==="
+                  echo "=== Preparing clean workspace ==="
+                  rm -rf /tmp/scan-src
                   mkdir -p /tmp/scan-src
-                  cp Dockerfile docker-compose.yml /tmp/scan-src/
-                
-                  docker run --rm -v /tmp/scan-src:/src hadolint/hadolint:latest hadolint /src/Dockerfile -f json > hadolint-report.json || true
                   
+                  cp Dockerfile docker-compose.yml /tmp/scan-src/
+
+                  echo "=== Running Hadolint on Dockerfile ==="
+                  docker run --rm -v /tmp/scan-src:/src hadolint/hadolint:latest \
+                    hadolint /src/Dockerfile -f json > hadolint-report.json || true
+
                   echo "=== Running KICS on docker-compose.yml ==="
-                  docker run --rm -v /tmp/scan-src:/src checkmarx/kics:latest scan --path /src/docker-compose.yml --output-path /src --report-formats json || true
-                
-                  [ -f /tmp/scan-src/results.json ] && mv /tmp/scan-src/results.json kics-report.json || echo '{"ok":false,"error":"no output"}' > kics-report.json
+                  docker run --rm -v /tmp/scan-src:/src checkmarx/kics:latest \
+                    scan --path /src/docker-compose.yml \
+                         --output-path /src \
+                         --report-formats json || true
+
+                  if [ -f /tmp/scan-src/results.json ]; then
+                    mv /tmp/scan-src/results.json kics-report.json
+                  else
+                    echo '{"ok":false,"error":"no output"}' > kics-report.json
+                  fi
+
                   echo "=== Misconfig scans finished. Reports saved ==="
                 '''
             }
