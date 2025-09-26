@@ -88,7 +88,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
                       echo "=== Running Hadolint on Dockerfile ==="
-                      docker run --rm -v "$PWD":/data hadolint/hadolint:latest \
+                      docker run --rm -v ${WORKSPACE}:/data hadolint/hadolint:latest \
                         hadolint /data/Dockerfile -f json > hadolint-report.json || true
                       echo "=== Hadolint finished. Report saved to hadolint-report.json ==="
                     '''
@@ -108,14 +108,12 @@ pipeline {
                     sh '''
                       echo "=== Running KICS on docker-compose.yml ==="
                       mkdir -p kics-out
-                      docker run --rm -v "$PWD":/src checkmarx/kics:latest \
+                      docker run --rm -v ${WORKSPACE}:/src checkmarx/kics:latest \
                         scan --path /src/docker-compose.yml --output-path /src/kics-out --report-formats json || true
         
-                      # ambil salah satu hasil JSON agar konsisten
                       if [ -f kics-out/results.json ]; then
                         mv kics-out/results.json kics-report.json
                       else
-                        # fallback jika nama filenya lain
                         cat kics-out/*.json > kics-report.json 2>/dev/null || echo '{"ok":false,"error":"no output"}' > kics-report.json
                       fi
                       echo "=== KICS finished. Report saved to kics-report.json ==="
@@ -128,6 +126,7 @@ pipeline {
                 }
             }
         }
+
         
         stage('Deploy') {
             steps {
