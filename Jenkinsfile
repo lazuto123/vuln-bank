@@ -84,6 +84,49 @@ pipeline {
             }
         }
 
+        stage('OS Hardening') {
+            agent {
+                docker {
+                    image 'python:3.9-bullseye'
+                    args '-u root --network host --entrypoint='
+                }
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'DeploymentUserCred', 
+                                                  usernameVariable: 'DEPLOY_USER', 
+                                                  passwordVariable: 'DEPLOY_PASS')]) {
+                    sh '''
+                    echo "=== Installing Ansible ==="
+                    pip3 install ansible
+        
+                    echo "=== Preparing inventory for remote server ==="
+                    cat > inventory.ini <<EOL
+        [ubuntuServer]
+        192.168.0.115 ansible_user=${DEPLOY_USER} ansible_password=${DEPLOY_PASS} ansible_sudo_pass=${DEPLOY_PASS}
+        EOL
+        
+                    echo "=== Preparing Ansible Playbook for OS Hardening ==="
+                    cat > hardening.yml <<EOL
+        ---
+        - name: Playbook to harden Ubuntu OS
+          hosts: ubuntuServer
+          remote_user: ${DEPLOY_USER}
+          become: yes
+          roles:
+            - dev-sec.os-hardening
+        EOL
+        
+                    echo "=== Installing dev-sec.os-hardening role ==="
+                    ansible-galaxy install dev-sec.os-hardening
+        
+                    echo "=== Running Ansible Playbook ==="
+                    ansible-playbook -i inventory.ini hardening.yml
+                    '''
+                }
+            }
+        }
+
+        
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
