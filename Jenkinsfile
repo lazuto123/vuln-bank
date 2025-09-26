@@ -101,7 +101,7 @@ pipeline {
                       snyk iac test Dockerfile --json > snyk-iac-docker-report.json || true
         
                       # Scan Kubernetes manifests
-                      snyk iac test k8s/ --json > snyk-iac-k8s-report.json || true
+                      snyk iac test docker-compose.yml --json > snyk-iac-docker-compose-report.json || true
         
                       echo "=== Misconfiguration scan finished. Reports saved. ==="
                     '''
