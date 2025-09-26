@@ -84,14 +84,13 @@ pipeline {
             }
         }
 
-        stage('Container Config Linting') {
+        stage('Misconfiguration Scanning') {
             steps {
                 sh '''
-                echo "=== Running Hadolint for Dockerfile ==="
-                docker run --rm -i hadolint/hadolint < Dockerfile || true
-        
-                echo "=== Running Checkov for docker-compose.yml ==="
-                docker run --rm -v $(pwd):/src bridgecrew/checkov --directory /src --framework dockerfile,docker_compose || true
+                echo "=== Running Checkov for Dockerfile ==="
+                docker run --rm -v $(pwd):/src bridgecrew/checkov \
+                    --directory /src --framework dockerfile \
+                    --output json --output-file-path /src/checkov_report.json || true
                 '''
             }
             post {
