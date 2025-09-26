@@ -166,19 +166,19 @@ pipeline {
                     if (sendMail) {
                         emailext(
                             subject: "Security Alerts di Pipeline",
-                            body: """Halo Tim,
+                            body: """Halo Ilham,
         
-        Ditemukan masalah security pada pipeline:
+        Ditemukan masalah security pada pipeline vuln-bank:
         
         ${reportContent}
         
         Silakan cek artifact hasil scan (JSON/XML/HTML) di Jenkins untuk detail lebih lanjut.
         
         """,
-                            to: "mhilham987@gmail.com"
+                            to: "brigaup987@gmail.com"
                         )
                     } else {
-                        echo "✅ Tidak ada High/Critical findings, email tidak dikirim."
+                        echo "Tidak ada High/Critical findings, email tidak dikirim."
                     }
                 }
             }
