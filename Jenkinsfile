@@ -81,42 +81,7 @@ pipeline {
                 archiveArtifacts artifacts: 'snyk-sast-report.json'
             }
         }
-
-        stage('Misconfig Scan') {
-            steps {
-                sh '''
-                  echo "=== Preparing clean workspace ==="
-                  rm -rf /tmp/scan-src
-                  mkdir -p /tmp/scan-src
-                  
-                  cp Dockerfile docker-compose.yml /tmp/scan-src/
-
-                  echo "=== Running Hadolint on Dockerfile ==="
-                  docker run --rm -v /tmp/scan-src:/src hadolint/hadolint:latest \
-                    hadolint /src/Dockerfile -f json > hadolint-report.json || true
-
-                  echo "=== Running KICS on docker-compose.yml ==="
-                  docker run --rm -v /tmp/scan-src:/src checkmarx/kics:latest \
-                    scan --path /src/docker-compose.yml \
-                         --output-path /src \
-                         --report-formats json || true
-
-                  if [ -f /tmp/scan-src/results.json ]; then
-                    mv /tmp/scan-src/results.json kics-report.json
-                  else
-                    echo '{"ok":false,"error":"no output"}' > kics-report.json
-                  fi
-
-                  echo "=== Misconfig scans finished. Reports saved ==="
-                '''
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: '*.json', allowEmptyArchive: true
-                }
-            }
-        }
-        
+      
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
@@ -129,6 +94,27 @@ pipeline {
                         "
                     '''
                 }
+            }
+        }
+        stage('DAST OWASP ZAP') {
+            agent {
+                docker {
+                    image 'ghcr.io/zaproxy/zaproxy:stable'
+                    args '-u root --network host -v /var/run/docker.sock:/var/run/docker.sock --entrypoint= -v ./zap/wrk/:/zap/wrk/:rw'
+                }
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh '''
+                      echo "=== Running OWASP ZAP Baseline Scan ==="
+                      zap-baseline.py -t http://192.168.0.115:5000 -r zapbaseline.html -x zapbaseline.xml || true
+                      echo "=== ZAP scan finished. Reports saved to zapbaseline.html and zapbaseline.xml ==="
+                    '''
+                }
+                sh 'cp /zap/wrk/zapbaseline.html ./zapbaseline.html || true'
+                sh 'cp /zap/wrk/zapbaseline.xml ./zapbaseline.xml || true'
+                archiveArtifacts artifacts: 'zapbaseline.html'
+                archiveArtifacts artifacts: 'zapbaseline.xml'
             }
         }
     }
