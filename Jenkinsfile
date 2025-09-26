@@ -81,7 +81,36 @@ pipeline {
                 archiveArtifacts artifacts: 'snyk-sast-report.json'
             }
         }
-                     
+
+        stage('Snyk IaC Misconfiguration') {
+            agent {
+                docker {
+                    image 'snyk/snyk:docker'
+                    args '-u root --network host --env SNYK_TOKEN=$SNYK_TOKEN --entrypoint='
+                }
+            }
+            environment {
+                SNYK_TOKEN = credentials('SnykToken')
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh '''
+                      echo "=== Running Snyk IaC Misconfiguration Scan ==="
+        
+                      # Scan Dockerfile
+                      snyk iac test Dockerfile --json > snyk-iac-docker-report.json || true
+        
+                      # Scan Kubernetes manifests
+                      snyk iac test k8s/ --json > snyk-iac-k8s-report.json || true
+        
+                      echo "=== Misconfiguration scan finished. Reports saved. ==="
+                    '''
+                }
+                archiveArtifacts artifacts: 'snyk-iac-*.json', allowEmptyArchive: true
+            }
+        }
+
+        
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
