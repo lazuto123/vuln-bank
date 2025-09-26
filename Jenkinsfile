@@ -137,7 +137,9 @@ pipeline {
                     if (fileExists('snyk-scan-report.json')) {
                         def snyk = readJSON file: 'snyk-scan-report.json'
                         def vulns = snyk?.vulnerabilities ?: []
+                        echo "DEBUG SCA - ditemukan ${vulns.size()} vulnerabilities total"
                         def highVulns = vulns.findAll { it.severity in ["high","critical"] }
+                        echo "DEBUG SCA - High/Critical: ${highVulns.size()}"
                         if (highVulns.size() > 0) {
                             sendMail = true
                             reportContent += "${highVulns.size()} High/Critical vulnerability dari Snyk SCA!\n"
@@ -148,8 +150,10 @@ pipeline {
                     if (fileExists('snyk-sast-report.json')) {
                         def sast = readJSON file: 'snyk-sast-report.json'
                         def results = sast?.runs?.collectMany { it.results } ?: []
+                        echo "DEBUG SAST - total results: ${results.size()}"
                         // SARIF pakai 'level': error, warning, note
                         def highIssues = results.findAll { it.level == "error" }
+                        echo "DEBUG SAST - High/Critical: ${highIssues.size()}"
                         if (highIssues.size() > 0) {
                             sendMail = true
                             reportContent += "${highIssues.size()} High/Critical issue dari Snyk SAST!\n"
@@ -159,7 +163,10 @@ pipeline {
                     // === OWASP ZAP DAST ===
                     if (fileExists('zapbaseline.xml')) {
                         def zapXml = new XmlSlurper().parse(new File("zapbaseline.xml"))
-                        def highFindings = zapXml.site.alerts.alertitem.findAll { it.riskcode.text() in ["3","4"] }
+                        def allAlerts = zapXml.site.alerts.alertitem
+                        echo "DEBUG ZAP - total alertitem: ${allAlerts.size()}"
+                        def highFindings = allAlerts.findAll { it.riskcode.text() in ["3","4"] }
+                        echo "DEBUG ZAP - High/Critical: ${highFindings.size()}"
                         if (highFindings.size() > 0) {
                             sendMail = true
                             reportContent += "${highFindings.size()} High/Critical finding dari OWASP ZAP!\n"
