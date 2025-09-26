@@ -83,6 +83,24 @@ pipeline {
                 archiveArtifacts artifacts: 'snyk-sast-report.json'
             }
         }
+
+        stage('Container Config Linting') {
+            steps {
+                sh '''
+                echo "=== Running Hadolint for Dockerfile ==="
+                docker run --rm -i hadolint/hadolint < Dockerfile || true
+        
+                echo "=== Running Checkov for docker-compose.yml ==="
+                docker run --rm -v $(pwd):/src bridgecrew/checkov --directory /src --framework dockerfile,docker_compose || true
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: '**/checkov_report*', allowEmptyArchive: true
+                }
+            }
+        }
+
         
         stage('OS Hardening') {
             agent {
