@@ -10,15 +10,15 @@ The pipeline is designed to detect **secrets, vulnerable dependencies, code issu
 The pipeline follows this workflow:
 
 ```mermaid
-flowchart TD
-    A[Checkout Source Code] --> B[Secret Scanning (TruffleHog)]
-    B --> C[SCA with Snyk]
-    C --> D[SAST with Snyk Code]
-    D --> E[Misconfiguration Scanning (Checkov)]
-    E --> F[OS Hardening (Ansible)]
-    F --> G[Deployment with Docker Compose]
-    G --> H[DAST with OWASP ZAP]
-    H --> I[Notification via Email]
+graph TD
+  A["Checkout Source Code"] --> B["Secret Scanning (TruffleHog)"]
+  B --> C["SCA with Snyk"]
+  C --> D["SAST with Snyk Code"]
+  D --> E["Misconfiguration Scanning (Checkov)"]
+  E --> F["OS Hardening (Ansible)"]
+  F --> G["Deployment with Docker Compose"]
+  G --> H["DAST with OWASP ZAP"]
+  H --> I["Notification via Email"]
 ```
 
 ---
@@ -68,3 +68,16 @@ The following tasks are still pending or need improvements:
 
 - This pipeline is still under active development.  
 - The end goal is to achieve a **comprehensive end-to-end security CI/CD pipeline** that can automatically detect, report, and manage vulnerabilities.  
+
+---
+
+## 🛠️ Mermaid troubleshooting (if GitHub can't render)
+
+If GitHub does not render the chart, try the following:
+
+- Ensure the block starts with three backticks and `mermaid` on the same line: ```mermaid
+- Use `graph TD` instead of `flowchart TD` (some renderers prefer `graph`).  
+- Quote node labels like `A["Label (with parentheses)"]` to avoid parsing issues.  
+- Avoid special control characters in labels.  
+- If still failing, check whether your repository has Mermaid support enabled or try viewing the README in a different browser or via VS Code preview.
+
