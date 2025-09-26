@@ -31,7 +31,7 @@ pipeline {
             agent {
                 docker {
                     image 'snyk/snyk:python'
-                    args "-u root --network host --env SNYK_TOKEN=$SNYK_TOKEN --entrypoint= -v ${WORKSPACE}:/workspace"
+                    args "-u root --network host --env SNYK_TOKEN=${env.SNYK_TOKEN} --entrypoint= -v ${env.WORKSPACE}:/workspace"
                 }
             }
             environment {
@@ -54,6 +54,7 @@ pipeline {
                       echo "=== Snyk scan finished. Report saved to snyk-scan-report.json ==="
                     '''
                 }
+                sh "cp /workspace/snyk-scan-report.json snyk-scan-report.json || true"
                 archiveArtifacts artifacts: 'snyk-scan-report.json'
             }
         }
@@ -62,7 +63,7 @@ pipeline {
             agent {
                 docker {
                     image 'snyk/snyk:python'
-                    args "-u root --network host --env SNYK_TOKEN=$SNYK_TOKEN --entrypoint= -v ${WORKSPACE}:/workspace"
+                    args "-u root --network host --env SNYK_TOKEN=${env.SNYK_TOKEN} --entrypoint= -v ${env.WORKSPACE}:/workspace"
                 }
             }
             environment {
@@ -78,6 +79,7 @@ pipeline {
                       echo "=== Snyk SAST scan finished. Report saved to snyk-sast-report.json ==="
                     '''
                 }
+                sh "cp /workspace/snyk-sast-report.json snyk-sast-report.json || true"
                 archiveArtifacts artifacts: 'snyk-sast-report.json'
             }
         }
@@ -101,19 +103,19 @@ pipeline {
             agent {
                 docker {
                     image 'ghcr.io/zaproxy/zaproxy:stable'
-                    args "-u root --network host -v ${WORKSPACE}:/workspace --entrypoint="
+                    args "-u root --network host -v /var/run/docker.sock:/var/run/docker.sock --entrypoint= -v ${env.WORKSPACE}:/zap/wrk/:rw"
                 }
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
                       echo "=== Running OWASP ZAP Baseline Scan ==="
-                      zap-baseline.py -t http://192.168.0.115:5000 \
-                        -r /workspace/zapbaseline.html \
-                        -x /workspace/zapbaseline.xml || true
+                      zap-baseline.py -t http://192.168.0.115:5000 -r /zap/wrk/zapbaseline.html -x /zap/wrk/zapbaseline.xml || true
                       echo "=== ZAP scan finished. Reports saved to zapbaseline.html and zapbaseline.xml ==="
                     '''
                 }
+                sh "cp /zap/wrk/zapbaseline.html zapbaseline.html || true"
+                sh "cp /zap/wrk/zapbaseline.xml zapbaseline.xml || true"
                 archiveArtifacts artifacts: 'zapbaseline.html'
                 archiveArtifacts artifacts: 'zapbaseline.xml'
             }
@@ -136,37 +138,59 @@ pipeline {
 
                     // === Snyk SCA ===
                     if (fileExists('snyk-scan-report.json')) {
-                        def snyk = readJSON file: 'snyk-scan-report.json'
-                        def vulns = snyk?.vulnerabilities ?: []
-                        def highVulns = vulns.findAll { it.severity?.toLowerCase() in ["high","critical"] }
-                        if (highVulns.size() > 0) {
-                            sendMail = true
-                            reportContent += "${highVulns.size()} High/Critical vulnerability dari Snyk SCA!\n"
+                        try {
+                            def snyk = readJSON file: 'snyk-scan-report.json'
+                            def vulns = snyk?.vulnerabilities ?: []
+                            echo "DEBUG SCA - total vulnerabilities: ${vulns.size()}"
+                            def highVulns = vulns.findAll { it.severity?.toLowerCase() in ["high","critical"] }
+                            echo "DEBUG SCA - High/Critical: ${highVulns.size()}"
+                            if (highVulns.size() > 0) {
+                                sendMail = true
+                                reportContent += "${highVulns.size()} High/Critical vulnerability dari Snyk SCA!\n"
+                            }
+                        } catch (err) {
+                            echo "ERROR parsing snyk-scan-report.json: ${err}"
+                            sh "cat snyk-scan-report.json"
                         }
                     }
 
                     // === Snyk SAST ===
                     if (fileExists('snyk-sast-report.json')) {
-                        def sast = readJSON file: 'snyk-sast-report.json'
-                        def results = sast?.runs?.collectMany { it.results } ?: []
-                        def highIssues = results.findAll { it.level?.toLowerCase() == "error" }
-                        if (highIssues.size() > 0) {
-                            sendMail = true
-                            reportContent += "${highIssues.size()} High/Critical issue dari Snyk SAST!\n"
+                        try {
+                            def sast = readJSON file: 'snyk-sast-report.json'
+                            def results = sast?.runs?.collectMany { it.results } ?: []
+                            echo "DEBUG SAST - total results: ${results.size()}"
+                            def highIssues = results.findAll { it.level?.toLowerCase() == "error" }
+                            echo "DEBUG SAST - High/Critical: ${highIssues.size()}"
+                            if (highIssues.size() > 0) {
+                                sendMail = true
+                                reportContent += "${highIssues.size()} High/Critical issue dari Snyk SAST!\n"
+                            }
+                        } catch (err) {
+                            echo "ERROR parsing snyk-sast-report.json: ${err}"
+                            sh "cat snyk-sast-report.json"
                         }
                     }
 
                     // === ZAP DAST ===
                     if (fileExists('zapbaseline.xml')) {
-                        def zapXml = new XmlSlurper().parse(new File("zapbaseline.xml"))
-                        def allAlerts = zapXml.site.alerts.alertitem
-                        def highFindings = allAlerts.findAll { it.riskcode.text() in ["3","4"] }
-                        if (highFindings.size() > 0) {
-                            sendMail = true
-                            reportContent += "${highFindings.size()} High/Critical finding dari OWASP ZAP!\n"
+                        try {
+                            def zapXml = new XmlSlurper().parse(new File("zapbaseline.xml"))
+                            def allAlerts = zapXml.site.alerts.alertitem
+                            echo "DEBUG ZAP - total alertitem: ${allAlerts.size()}"
+                            def highFindings = allAlerts.findAll { it.riskcode.text() in ["3","4"] }
+                            echo "DEBUG ZAP - High/Critical: ${highFindings.size()}"
+                            if (highFindings.size() > 0) {
+                                sendMail = true
+                                reportContent += "${highFindings.size()} High/Critical finding dari OWASP ZAP!\n"
+                            }
+                        } catch (err) {
+                            echo "ERROR parsing zapbaseline.xml: ${err}"
+                            sh "cat zapbaseline.xml"
                         }
                     }
 
+                    // === Kirim Email kalau ada temuan ===
                     if (sendMail) {
                         emailext(
                             subject: "Security Alerts di Pipeline - vuln-bank",
