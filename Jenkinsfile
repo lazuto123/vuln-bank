@@ -40,8 +40,12 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                      echo "=== Running Snyk SCA Test (skip unresolved deps)==="
-                      snyk test --file=requirements.txt --package-manager=pip --skip-unresolved --json > snyk-scan-report.json || true
+                      echo "=== Preparing CI requirements ==="
+                      cp requirements.txt requirements.ci.txt
+                      sed -i 's/psycopg2-binary==2.9.9/psycopg2-binary==2.9.10/g' requirements.ci.txt
+        
+                      echo "=== Running Snyk SCA Test ==="
+                      snyk test --file=requirements.ci.txt --package-manager=pip --json > snyk-scan-report.json || true
                       cat snyk-scan-report.json
                       echo "=== Snyk scan finished. Report saved to snyk-scan-report.json ==="
                     '''
@@ -49,6 +53,7 @@ pipeline {
                 archiveArtifacts artifacts: 'snyk-scan-report.json'
             }
         }
+
              
         stage('Deploy') {
             steps {
