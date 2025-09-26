@@ -179,7 +179,41 @@ pipeline {
                 archiveArtifacts artifacts: 'zapbaseline.html'
                 archiveArtifacts artifacts: 'zapbaseline.xml'
             }
+            post {
+                always {
+                    withCredentials([string(credentialsId: 'DefectDojoAPIToken', variable: 'DD_API_TOKEN')]) {
+                        sh '''
+                        echo "=== Uploading results to DefectDojo ==="
+
+                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
+                          -H "Authorization: Token $DD_API_TOKEN" \
+                          -F "scan_type=Trufflehog Scan" \
+                          -F "file=@trufflehog_report.json" \
+                          -F 'engagement=1' || true
+
+                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
+                          -H "Authorization: Token $DD_API_TOKEN" \
+                          -F "scan_type=Snyk Scan" \
+                          -F "file=@snyk-scan-report.json" \
+                          -F 'engagement=1' || true
+
+                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
+                          -H "Authorization: Token $DD_API_TOKEN" \
+                          -F "scan_type=Snyk Code Scan" \
+                          -F "file=@snyk-sast-report.json" \
+                          -F 'engagement=1' || true
+
+                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
+                          -H "Authorization: Token $DD_API_TOKEN" \
+                          -F "scan_type=ZAP Scan" \
+                          -F "file=@zapbaseline.xml" \
+                          -F 'engagement=1' || true
+                        '''
+                    }
+                }
+            }
         }
+
 
         stage('Notify') {
             steps {
