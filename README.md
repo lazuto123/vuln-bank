@@ -71,13 +71,4 @@ The following tasks are still pending or need improvements:
 
 ---
 
-## 🛠️ Mermaid troubleshooting (if GitHub can't render)
-
-If GitHub does not render the chart, try the following:
-
-- Ensure the block starts with three backticks and `mermaid` on the same line: ```mermaid
-- Use `graph TD` instead of `flowchart TD` (some renderers prefer `graph`).  
-- Quote node labels like `A["Label (with parentheses)"]` to avoid parsing issues.  
-- Avoid special control characters in labels.  
-- If still failing, check whether your repository has Mermaid support enabled or try viewing the README in a different browser or via VS Code preview.
 
