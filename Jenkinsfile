@@ -82,60 +82,52 @@ pipeline {
             }
         }
 
-        stage('Misconfiguration Scanning (Dockerfile & compose)') {
+        stage('Dockerfile Misconfig (Hadolint)') {
             agent any
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                      set -euo pipefail || true
-                      echo "=== Misconfiguration scan: hadolint (Dockerfile) & kics (docker-compose.yml) ==="
-        
-                      # Hadolint for Dockerfile
-                      if [ -f Dockerfile ]; then
-                        echo "[hadolint] Dockerfile found — running hadolint..."
-                        docker run --rm -v "$PWD":/data hadolint/hadolint:latest hadolint /data/Dockerfile -f json > hadolint-report.json || true
-                        echo "[hadolint] report written to hadolint-report.json"
-                      else
-                        echo '[hadolint] Dockerfile not found, creating placeholder report'
-                        echo '{"ok": false, "error": "Dockerfile not found"}' > hadolint-report.json
-                      fi
-        
-                      # KICS for docker-compose.yml
-                      if [ -f docker-compose.yml ]; then
-                        echo "[kics] docker-compose.yml found — running KICS..."
-                        # output-path will contain .json files; run as temporary directory 'kics-report'
-                        rm -rf kics-report || true
-                        docker run --rm -v "$PWD":/workspace checkmarx/kics:latest scan --path /workspace/docker-compose.yml --output-path /workspace/kics-report --report-formats json || true
-        
-                        # Normalize KICS output into single JSON file for downstream consumption
-                        if [ -d kics-report ]; then
-                          # concatenate all json outputs (if multiple) into one array-ish file (simple concat)
-                          cat kics-report/*.json > kics-report.json 2>/dev/null || echo '{"ok": false, "error": "KICS produced no JSON output"}' > kics-report.json
-                          echo "[kics] report written to kics-report.json"
-                        else
-                          echo '[kics] KICS did not produce output directory, creating placeholder report'
-                          echo '{"ok": false, "error": "KICS scan failed or produced no output"}' > kics-report.json
-                        fi
-                      else
-                        echo '[kics] docker-compose.yml not found, creating placeholder report'
-                        echo '{"ok": false, "error": "docker-compose.yml not found"}' > kics-report.json
-                      fi
-        
-                      echo "=== Misconfiguration scan finished ==="
-                      echo "---- hadolint report ----"
-                      cat hadolint-report.json || true
-                      echo "---- kics report ----"
-                      cat kics-report.json || true
+                      echo "=== Running Hadolint on Dockerfile ==="
+                      docker run --rm -v "$PWD":/data hadolint/hadolint:latest \
+                        hadolint /data/Dockerfile -f json > hadolint-report.json || true
+                      echo "=== Hadolint finished. Report saved to hadolint-report.json ==="
                     '''
                 }
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'hadolint-report.json,kics-report.json', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'hadolint-report.json', allowEmptyArchive: true
                 }
             }
         }
-
+        
+        stage('Compose Misconfig (KICS)') {
+            agent any
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh '''
+                      echo "=== Running KICS on docker-compose.yml ==="
+                      mkdir -p kics-out
+                      docker run --rm -v "$PWD":/src checkmarx/kics:latest \
+                        scan --path /src/docker-compose.yml --output-path /src/kics-out --report-formats json || true
+        
+                      # ambil salah satu hasil JSON agar konsisten
+                      if [ -f kics-out/results.json ]; then
+                        mv kics-out/results.json kics-report.json
+                      else
+                        # fallback jika nama filenya lain
+                        cat kics-out/*.json > kics-report.json 2>/dev/null || echo '{"ok":false,"error":"no output"}' > kics-report.json
+                      fi
+                      echo "=== KICS finished. Report saved to kics-report.json ==="
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'kics-report.json', allowEmptyArchive: true
+                }
+            }
+        }
         
         stage('Deploy') {
             steps {
