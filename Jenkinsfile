@@ -58,7 +58,30 @@ pipeline {
             }
         }
 
-             
+        stage('SAST Snyk Code') {
+            agent {
+                docker {
+                    image 'snyk/snyk:python'
+                    args '-u root --network host --env SNYK_TOKEN=$SNYK_TOKEN --entrypoint='
+                }
+            }
+            environment {
+                SNYK_TOKEN = credentials('SnykToken')
+            }
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    sh '''
+                      echo "=== Running Snyk SAST (Code Analysis) ==="
+                      snyk code test --json > snyk-sast-report.json || true
+        
+                      cat snyk-sast-report.json
+                      echo "=== Snyk SAST scan finished. Report saved to snyk-sast-report.json ==="
+                    '''
+                }
+                archiveArtifacts artifacts: 'snyk-sast-report.json'
+            }
+        }
+                     
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
