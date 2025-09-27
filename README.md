@@ -18,7 +18,6 @@ graph TD
   E --> F["OS Hardening (Ansible)"]
   F --> G["Deployment with Docker Compose"]
   G --> H["DAST with OWASP ZAP"]
-  H --> I["Notification via Email"]
 ```
 
 ---
@@ -35,6 +34,7 @@ graph TD
 | **OWASP ZAP**    | Dynamic Application Security Testing (DAST) – scans the running web application. |
 | **Jenkins**      | CI/CD orchestrator for executing the pipeline. |
 | **Email Notification (emailext)** | Sends alerts if critical/high vulnerabilities are found. |
+| **Defect Dojo** | Vulnerability Manager. |
 
 ---
 
@@ -56,11 +56,11 @@ If **no High/Critical findings** are present, the pipeline proceeds normally wit
 
 The following tasks are still pending or need improvements:
 
-- [ ] **Email Notifications**: Email body only shows TruffleHog findings, not full details from Snyk, Checkov, or ZAP.  
+- [ ] **Email Notifications**: Currently, email is only sent for TruffleHog and SAST findings, while SCA and DAST results even with high or critical issues are not included. 
 - [ ] **Hardening & Compliance Checks**: Ansible hardening role is not yet running smoothly in the pipeline.  
 - [ ] **Misconfiguration Scanning**: Checkov reports are not fully integrated into the findings.  
 - [ ] **Additional SAST with LLM**: Integrate LLM-based code analysis to detect logical vulnerabilities.  
-- [ ] **Integration with Vulnerability Manager**: Not yet connected to a vulnerability management platform (e.g., DefectDojo, Faraday, or Jira).  
+- [ ] **Integration with Vulnerability Manager**: Not yet running smoothly.  
 
 ---
 
