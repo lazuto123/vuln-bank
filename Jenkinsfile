@@ -20,9 +20,23 @@ pipeline {
             post {
                 always {
                     archiveArtifacts artifacts: 'trufflehog_report.json', allowEmptyArchive: true
-                }
-                failure {
-                    echo "Secret scanning failed."
+                    script {
+                        if (fileExists('trufflehog_report.json')) {
+                            def secrets = readJSON file: 'trufflehog_report.json'
+                            if (secrets && secrets.size() > 0) {
+                                emailext(
+                                    subject: "Secret ditemukan di pipeline vuln-bank",
+                                    body: """Halo Ilham,
+
+Ditemukan ${secrets.size()} secret di hasil TruffleHog.
+
+Silakan cek artifact trufflehog_report.json di Jenkins untuk detail.
+""",
+                                    to: "brigaup987@gmail.com"
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -40,22 +54,35 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
-                      echo "=== Preparing CI requirements (patched install) ==="
-                      cp requirements.txt requirements.ci.txt
-                      sed -i 's/psycopg2-binary==2.9.9/psycopg2-binary==2.9.10/g' requirements.ci.txt
-
-                      echo "=== Installing dependencies from requirements.ci.txt ==="
-                      pip install --no-cache-dir -r requirements.ci.txt || true
-
-                      echo "=== Running Snyk SCA Test against original requirements.txt ==="
+                      echo "=== Running Snyk SCA Test ==="
                       snyk test --file=requirements.txt --package-manager=pip --json > /workspace/snyk-scan-report.json || true
-
-                      cat /workspace/snyk-scan-report.json
-                      echo "=== Snyk scan finished. Report saved to snyk-scan-report.json ==="
                     '''
                 }
                 sh "cp /workspace/snyk-scan-report.json snyk-scan-report.json || true"
                 archiveArtifacts artifacts: 'snyk-scan-report.json'
+            }
+            post {
+                always {
+                    script {
+                        if (fileExists('snyk-scan-report.json')) {
+                            def snyk = readJSON file: 'snyk-scan-report.json'
+                            def vulns = snyk?.vulnerabilities ?: []
+                            def highVulns = vulns.findAll { it.severity?.toLowerCase() in ["high","critical"] }
+                            if (highVulns.size() > 0) {
+                                emailext(
+                                    subject: "Snyk SCA menemukan High/Critical vulnerability",
+                                    body: """Halo Ilham,
+
+Ditemukan ${highVulns.size()} High/Critical vulnerability di Snyk SCA.
+
+Silakan cek artifact snyk-scan-report.json di Jenkins untuk detail.
+""",
+                                    to: "brigaup987@gmail.com"
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -74,13 +101,33 @@ pipeline {
                     sh '''
                       echo "=== Running Snyk SAST (Code Analysis) ==="
                       snyk code test --json > /workspace/snyk-sast-report.json || true
-
-                      cat /workspace/snyk-sast-report.json
-                      echo "=== Snyk SAST scan finished. Report saved to snyk-sast-report.json ==="
                     '''
                 }
                 sh "cp /workspace/snyk-sast-report.json snyk-sast-report.json || true"
                 archiveArtifacts artifacts: 'snyk-sast-report.json'
+            }
+            post {
+                always {
+                    script {
+                        if (fileExists('snyk-sast-report.json')) {
+                            def sast = readJSON file: 'snyk-sast-report.json'
+                            def results = sast?.runs?.collectMany { it.results } ?: []
+                            def highIssues = results.findAll { it.level?.toLowerCase() == "error" }
+                            if (highIssues.size() > 0) {
+                                emailext(
+                                    subject: "Snyk SAST menemukan High/Critical issue",
+                                    body: """Halo Ilham,
+
+Ditemukan ${highIssues.size()} High/Critical issue di Snyk SAST.
+
+Silakan cek artifact snyk-sast-report.json di Jenkins untuk detail.
+""",
+                                    to: "brigaup987@gmail.com"
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -100,7 +147,6 @@ pipeline {
             }
         }
 
-        
         stage('OS Hardening') {
             agent {
                 docker {
@@ -143,7 +189,6 @@ pipeline {
             }
         }
 
-
         stage('Deploy') {
             steps {
                 sshagent(['DeploymentSSHKey']) {
@@ -171,7 +216,6 @@ pipeline {
                     sh '''
                       echo "=== Running OWASP ZAP Baseline Scan ==="
                       zap-baseline.py -t http://192.168.0.115:5000 -r /zap/wrk/zapbaseline.html -x /zap/wrk/zapbaseline.xml || true
-                      echo "=== ZAP scan finished. Reports saved to zapbaseline.html and zapbaseline.xml ==="
                     '''
                 }
                 sh "cp /zap/wrk/zapbaseline.html zapbaseline.html || true"
@@ -181,6 +225,27 @@ pipeline {
             }
             post {
                 always {
+                    script {
+                        if (fileExists('zapbaseline.xml')) {
+                            def zapXml = new XmlSlurper().parse(new File("zapbaseline.xml"))
+                            def allAlerts = zapXml.site.alerts.alertitem
+                            def highFindings = allAlerts.findAll { it.riskcode.text() in ["3","4"] }
+                            if (highFindings.size() > 0) {
+                                emailext(
+                                    subject: "OWASP ZAP menemukan High/Critical finding",
+                                    body: """Halo Ilham,
+
+Ditemukan ${highFindings.size()} High/Critical finding di OWASP ZAP.
+
+Silakan cek artifact zapbaseline.xml/html di Jenkins untuk detail.
+""",
+                                    to: "brigaup987@gmail.com"
+                                )
+                            }
+                        }
+                    }
+
+                    // Upload ke DefectDojo
                     withCredentials([string(credentialsId: 'DefectDojoAPIToken', variable: 'DD_API_TOKEN')]) {
                         sh '''
                         echo "=== Uploading results to DefectDojo ==="
@@ -209,98 +274,6 @@ pipeline {
                           -F "file=@zapbaseline.xml" \
                           -F 'engagement=1' || true
                         '''
-                    }
-                }
-            }
-        }
-
-
-        stage('Notify') {
-            steps {
-                script {
-                    def sendMail = false
-                    def reportContent = ""
-
-                    // === TruffleHog Secret Scanning ===
-                    if (fileExists('trufflehog_report.json')) {
-                        def secrets = readJSON file: 'trufflehog_report.json'
-                        if (secrets && secrets.size() > 0) {
-                            sendMail = true
-                            reportContent += "Secrets ditemukan di TruffleHog!\n"
-                        }
-                    }
-
-                    // === Snyk SCA ===
-                    if (fileExists('snyk-scan-report.json')) {
-                        try {
-                            def snyk = readJSON file: 'snyk-scan-report.json'
-                            def vulns = snyk?.vulnerabilities ?: []
-                            echo "DEBUG SCA - total vulnerabilities: ${vulns.size()}"
-                            def highVulns = vulns.findAll { it.severity?.toLowerCase() in ["high","critical"] }
-                            echo "DEBUG SCA - High/Critical: ${highVulns.size()}"
-                            if (highVulns.size() > 0) {
-                                sendMail = true
-                                reportContent += "${highVulns.size()} High/Critical vulnerability dari Snyk SCA!\n"
-                            }
-                        } catch (err) {
-                            echo "ERROR parsing snyk-scan-report.json: ${err}"
-                            sh "cat snyk-scan-report.json"
-                        }
-                    }
-
-                    // === Snyk SAST ===
-                    if (fileExists('snyk-sast-report.json')) {
-                        try {
-                            def sast = readJSON file: 'snyk-sast-report.json'
-                            def results = sast?.runs?.collectMany { it.results } ?: []
-                            echo "DEBUG SAST - total results: ${results.size()}"
-                            def highIssues = results.findAll { it.level?.toLowerCase() == "error" }
-                            echo "DEBUG SAST - High/Critical: ${highIssues.size()}"
-                            if (highIssues.size() > 0) {
-                                sendMail = true
-                                reportContent += "${highIssues.size()} High/Critical issue dari Snyk SAST!\n"
-                            }
-                        } catch (err) {
-                            echo "ERROR parsing snyk-sast-report.json: ${err}"
-                            sh "cat snyk-sast-report.json"
-                        }
-                    }
-
-                    // === ZAP DAST ===
-                    if (fileExists('zapbaseline.xml')) {
-                        try {
-                            def zapXml = new XmlSlurper().parse(new File("zapbaseline.xml"))
-                            def allAlerts = zapXml.site.alerts.alertitem
-                            echo "DEBUG ZAP - total alertitem: ${allAlerts.size()}"
-                            def highFindings = allAlerts.findAll { it.riskcode.text() in ["3","4"] }
-                            echo "DEBUG ZAP - High/Critical: ${highFindings.size()}"
-                            if (highFindings.size() > 0) {
-                                sendMail = true
-                                reportContent += "${highFindings.size()} High/Critical finding dari OWASP ZAP!\n"
-                            }
-                        } catch (err) {
-                            echo "ERROR parsing zapbaseline.xml: ${err}"
-                            sh "cat zapbaseline.xml"
-                        }
-                    }
-
-                    // === Kirim Email kalau ada temuan ===
-                    if (sendMail) {
-                        emailext(
-                            subject: "Security Alerts di Pipeline - vuln-bank",
-                            body: """Halo Ilham,
-
-Ditemukan masalah security pada pipeline vuln-bank:
-
-${reportContent}
-
-Silakan cek artifact hasil scan (JSON/XML/HTML) di Jenkins untuk detail lebih lanjut.
-
-""",
-                            to: "brigaup987@gmail.com"
-                        )
-                    } else {
-                        echo "Tidak ada High/Critical findings, email tidak dikirim."
                     }
                 }
             }
