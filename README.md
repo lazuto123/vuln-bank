@@ -56,7 +56,7 @@ If **no High/Critical findings** are present, the pipeline proceeds normally wit
 
 The following tasks are still pending or need improvements:
 
-- [ ] **Email Notifications**: Currently, email is only sent for TruffleHog and SAST findings, while SCA and DAST results even with high or critical issues are not included. 
+- [ ] **Email Notifications**: Currently, email is only sent for TruffleHog, SAST, and DAST findings, while SCA results even with high or critical issues are not included. 
 - [ ] **Hardening & Compliance Checks**: Ansible hardening role is not yet running smoothly in the pipeline.  
 - [ ] **Misconfiguration Scanning**: Checkov reports are not fully integrated into the findings.  
 - [ ] **Additional SAST with LLM**: Integrate LLM-based code analysis to detect logical vulnerabilities.  
