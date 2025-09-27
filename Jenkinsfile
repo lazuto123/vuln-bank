@@ -229,13 +229,12 @@ Silakan cek artifact snyk-sast-report.json di Jenkins untuk detail.
                 always {
                     script {
                         if (fileExists('zapbaseline.xml')) {
-                            // hitung jumlah finding High/Critical dengan xmllint
                             def highCount = sh(
-                                script: "xmllint --xpath 'count(//alertitem[riskcode=3 or riskcode=4])' zapbaseline.xml",
+                                script: "grep -c '<riskcode>[34]</riskcode>' zapbaseline.xml || true",
                                 returnStdout: true
                             ).trim()
         
-                            if (highCount.toInteger() > 0) {
+                            if (highCount.isInteger() && highCount.toInteger() > 0) {
                                 emailext(
                                     subject: "OWASP ZAP menemukan High/Critical finding",
                                     body: """Halo Ilham,
@@ -250,16 +249,54 @@ Silakan cek artifact snyk-sast-report.json di Jenkins untuk detail.
                         }
                     }
         
-                    // Upload hasil scan ke DefectDojo
                     withCredentials([string(credentialsId: 'DefectDojoAPIToken', variable: 'DD_API_TOKEN')]) {
                         sh '''
                         echo "=== Uploading results to DefectDojo ==="
+                        DD_HOST="192.168.0.114"
+                        DD_PORT="8081"
+                        DD_URL="http://${DD_HOST}:${DD_PORT}/api/v2/import-scan/"
         
-                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
-                          -H "Authorization: Token $DD_API_TOKEN" \
-                          -F "scan_type=ZAP Scan" \
-                          -F "file=@zapbaseline.xml" \
-                          -F 'engagement=1' || true
+                        # TruffleHog (Secret Scanning)
+                        if [ -f trufflehog_report.json ]; then
+                          echo "Uploading trufflehog_report.json..."
+                          curl -sS -X POST "$DD_URL" \
+                            -H "Authorization: Token $DD_API_TOKEN" \
+                            -F "scan_type=Trufflehog Scan" \
+                            -F "file=@trufflehog_report.json" \
+                            -F "engagement=1" || true
+                        fi
+        
+                        # Snyk SCA
+                        if [ -f snyk-scan-report.json ]; then
+                          echo "Uploading snyk-scan-report.json..."
+                          curl -sS -X POST "$DD_URL" \
+                            -H "Authorization: Token $DD_API_TOKEN" \
+                            -F "scan_type=Snyk Scan" \
+                            -F "file=@snyk-scan-report.json" \
+                            -F "engagement=1" || true
+                        fi
+        
+                        # Snyk SAST (Code)
+                        if [ -f snyk-sast-report.json ]; then
+                          echo "Uploading snyk-sast-report.json..."
+                          curl -sS -X POST "$DD_URL" \
+                            -H "Authorization: Token $DD_API_TOKEN" \
+                            -F "scan_type=Snyk Code Scan" \
+                            -F "file=@snyk-sast-report.json" \
+                            -F "engagement=1" || true
+                        fi
+        
+                        # OWASP ZAP (DAST)
+                        if [ -f zapbaseline.xml ]; then
+                          echo "Uploading zapbaseline.xml..."
+                          curl -sS -X POST "$DD_URL" \
+                            -H "Authorization: Token $DD_API_TOKEN" \
+                            -F "scan_type=ZAP Scan" \
+                            -F "file=@zapbaseline.xml" \
+                            -F "engagement=1" || true
+                        fi
+        
+                        echo "=== Upload to DefectDojo finished ==="
                         '''
                     }
                 }
