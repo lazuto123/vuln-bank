@@ -215,7 +215,9 @@ Silakan cek artifact snyk-sast-report.json di Jenkins untuk detail.
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     sh '''
                       echo "=== Running OWASP ZAP Baseline Scan ==="
-                      zap-baseline.py -t http://192.168.0.115:5000 -r /zap/wrk/zapbaseline.html -x /zap/wrk/zapbaseline.xml || true
+                      zap-baseline.py -t http://192.168.0.115:5000 \
+                        -r /zap/wrk/zapbaseline.html \
+                        -x /zap/wrk/zapbaseline.xml || true
                     '''
                 }
                 sh "cp /zap/wrk/zapbaseline.html zapbaseline.html || true"
@@ -227,47 +229,32 @@ Silakan cek artifact snyk-sast-report.json di Jenkins untuk detail.
                 always {
                     script {
                         if (fileExists('zapbaseline.xml')) {
-                            def zapXml = new XmlSlurper().parse(new File("zapbaseline.xml"))
-                            def allAlerts = zapXml.site.alerts.alertitem
-                            def highFindings = allAlerts.findAll { it.riskcode.text() in ["3","4"] }
-                            if (highFindings.size() > 0) {
+                            // hitung jumlah finding High/Critical dengan xmllint
+                            def highCount = sh(
+                                script: "xmllint --xpath 'count(//alertitem[riskcode=3 or riskcode=4])' zapbaseline.xml",
+                                returnStdout: true
+                            ).trim()
+        
+                            if (highCount.toInteger() > 0) {
                                 emailext(
                                     subject: "OWASP ZAP menemukan High/Critical finding",
                                     body: """Halo Ilham,
-
-Ditemukan ${highFindings.size()} High/Critical finding di OWASP ZAP.
-
-Silakan cek artifact zapbaseline.xml/html di Jenkins untuk detail.
-""",
+        
+        Ditemukan ${highCount} High/Critical finding di OWASP ZAP.
+        
+        Silakan cek artifact zapbaseline.xml/html di Jenkins untuk detail.
+        """,
                                     to: "brigaup987@gmail.com"
                                 )
                             }
                         }
                     }
-
-                    // Upload ke DefectDojo
+        
+                    // Upload hasil scan ke DefectDojo
                     withCredentials([string(credentialsId: 'DefectDojoAPIToken', variable: 'DD_API_TOKEN')]) {
                         sh '''
                         echo "=== Uploading results to DefectDojo ==="
-
-                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
-                          -H "Authorization: Token $DD_API_TOKEN" \
-                          -F "scan_type=Trufflehog Scan" \
-                          -F "file=@trufflehog_report.json" \
-                          -F 'engagement=1' || true
-
-                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
-                          -H "Authorization: Token $DD_API_TOKEN" \
-                          -F "scan_type=Snyk Scan" \
-                          -F "file=@snyk-scan-report.json" \
-                          -F 'engagement=1' || true
-
-                        curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
-                          -H "Authorization: Token $DD_API_TOKEN" \
-                          -F "scan_type=Snyk Code Scan" \
-                          -F "file=@snyk-sast-report.json" \
-                          -F 'engagement=1' || true
-
+        
                         curl -X POST http://192.168.0.114:8081/api/v2/import-scan/ \
                           -H "Authorization: Token $DD_API_TOKEN" \
                           -F "scan_type=ZAP Scan" \
@@ -278,5 +265,8 @@ Silakan cek artifact zapbaseline.xml/html di Jenkins untuk detail.
                 }
             }
         }
+
+
+        
     }
 }
